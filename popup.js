@@ -37,6 +37,12 @@ for (let toggle of toggles){
 }
 
 
+var getActiveTab = function(cb){
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        cb(tabs[0]);
+    });
+}
+
 function htmlEntities(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -57,18 +63,18 @@ for (i = 0; i < acc.length; i++) {
       panel.style.display = "block";
       var el = document.getElementById("denyList");
       chrome.storage.sync.get(["originDenyList"], function(result) {
-        el.value = result.originDenyList.join(",");
+        el.value = (result.originDenyList || []).join(",");
         el.focus();
       })
-      chrome.tabs.getSelected(null,function(tab) {
+      getActiveTab(function(tab) {
 
         var origin = (new URL(tab.url)).origin;
         chrome.storage.sync.get(["leakedKeys"], function(result) {
-            var keys = result.leakedKeys[origin];
+            var keys = (result.leakedKeys || {})[origin];
             let keyInfo = "";
             let htmlList = "";
-            if(!keys){keys = []}
-            for (key of keys){
+            if(!Array.isArray(keys)){keys = []}
+            for (let key of keys){
                 keyInfo = key["key"] + ": " + key["match"] + " found in " + key["src"];
                 if (key["encoded"]){
                      keyInfo += " decoded from " + key["encoded"].substring(0,9) + "..."
@@ -89,14 +95,21 @@ var downloadCSV = function(){
         let csvRows = [];
         for (let origin in result.leakedKeys){
             var findings = result.leakedKeys[origin];
-            for (finding of findings){
+            if (!Array.isArray(findings)){
+                continue;
+            }
+            for (let finding of findings){
                 csvRows.push([origin, finding["src"], finding["parentUrl"], finding["key"], finding["match"], finding["encoded"]])
             }
         }
-        let csvContent = "data:text/csv;charset=utf-8,"
-            + csvRows.map(e => e.join(",")).join("\n");
-        var encodedUri = encodeURI(csvContent);
-        window.open(encodedUri);
+        let csvContent = csvRows.map(e => e.join(",")).join("\n");
+        // Chrome blocks navigating to data: URLs, so download through a blob link instead
+        let blob = new Blob([csvContent], {type: "text/csv;charset=utf-8"});
+        let link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "trufflehog_findings.csv";
+        link.click();
+        setTimeout(function(){ URL.revokeObjectURL(link.href); }, 1000);
     })
 }
 
@@ -105,32 +118,27 @@ document.getElementById("downloadAllFindings").addEventListener("click", functio
 })
 document.getElementById("clearOriginFindings").addEventListener("click", function() {
     chrome.storage.sync.get(["leakedKeys"], function(result) {
-        chrome.tabs.getSelected(null,function(tab) {
+        getActiveTab(function(tab) {
             var origin = (new URL(tab.url)).origin;
-            result.leakedKeys[origin] = {};
-            chrome.storage.sync.set({"leakedKeys": result.leakedKeys});
-            chrome.browserAction.setBadgeText({text: ''});
+            var leakedKeys = result.leakedKeys || {};
+            leakedKeys[origin] = [];
+            chrome.storage.sync.set({"leakedKeys": leakedKeys});
+            chrome.action.setBadgeText({text: ''});
             document.getElementById("findingList").innerHTML = "";
         })
     })
 })
 document.getElementById("clearAllFindings").addEventListener("click", function() {
-    chrome.storage.sync.get(["leakedKeys"], function(result) {
-        chrome.tabs.getSelected(null,function(tab) {
-            var origin = (new URL(tab.url)).origin;
-            result.leakedKeys = {};
-            chrome.storage.sync.set({"leakedKeys": result.leakedKeys});
-            chrome.browserAction.setBadgeText({text: ''});
-            document.getElementById("findingList").innerHTML = "";
-        })
-    })
+    chrome.storage.sync.set({"leakedKeys": {}});
+    chrome.action.setBadgeText({text: ''});
+    document.getElementById("findingList").innerHTML = "";
 })
 document.getElementById("openTabs").addEventListener("click", function() {
     var rawTabList = document.getElementById("tabList").value;
     var tabList = rawTabList.split(",").map(function(item) {
         return item.trim();
     })
-    for (tab of tabList){
+    for (let tab of tabList){
         console.log(tab)
     }
     chrome.runtime.sendMessage({"openTabs": tabList});

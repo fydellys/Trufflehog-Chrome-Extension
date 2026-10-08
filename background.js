@@ -1,31 +1,17 @@
 // this is the background code...
 
-// listen for our browerAction to be clicked
-// for the current tab, inject the "inject.js" file & execute it
+// runs as a Manifest V3 service worker; inject.js is loaded via content_scripts
 
 
-var currentTab;
 var version = "1.0";
 
-chrome.tabs.query( //get current Tab
-    {
-        currentWindow: true,
-        active: true
-    },
-    function(tabArray) {
-        currentTab = tabArray[0];
-        chrome.tabs.executeScript(currentTab.ib, {
-            file: 'inject.js'
-        });
-    }
-)
-
-chrome.storage.sync.get(['ranOnce'], function(ranOnce) {
-    if (! ranOnce.ranOnce){
-        chrome.storage.sync.set({"ranOnce": true});
-        chrome.storage.sync.set({"originDenyList": ["https://www.google.com"]});
-    }
-
+chrome.runtime.onInstalled.addListener(function() {
+    chrome.storage.sync.get(['ranOnce'], function(ranOnce) {
+        if (! ranOnce.ranOnce){
+            chrome.storage.sync.set({"ranOnce": true});
+            chrome.storage.sync.set({"originDenyList": ["https://www.google.com"]});
+        }
+    })
 })
 
 
@@ -81,8 +67,8 @@ let aws = {
 
 let denyList = ["AIDAAAAAAAAAAAAAAAAA"]
 
-a = ""
-b = ""
+var a = ""
+var b = ""
 
 
 
@@ -115,7 +101,7 @@ var checkData = function(data, src, regexes, fromEncoded=false, parentUrl=undefi
             for (let finding of findings){
                 if(Array.isArray(keys[parentOrigin])){
                     var newFinding = true;
-                    for (key of keys[parentOrigin]){
+                    for (let key of keys[parentOrigin]){
                         if (key["src"] == finding["src"] && key["match"] == finding["match"] && key["key"] == finding["key"] && key["encoded"] == finding["encoded"] && key["parentUrl"] == finding["parentUrl"]){
                             newFinding = false;
                             break;
@@ -137,7 +123,7 @@ var checkData = function(data, src, regexes, fromEncoded=false, parentUrl=undefi
         })
     }
     let decodedStrings = getDecodedb64(data);
-    for (encoded of decodedStrings){
+    for (let encoded of decodedStrings){
         checkData(encoded[1], src, regexes, encoded[0], parentUrl, parentOrigin);
     }
 }
@@ -150,28 +136,45 @@ var updateTabAndAlert = function(finding){
         console.log(result.alerts)
         if (result.alerts == undefined || result.alerts){
             if (fromEncoded){
-                alert(key + ": " + match + " found in " + src + " decoded from " + fromEncoded.substring(0,9) + "...");
+                notify(key + ": " + match + " found in " + src + " decoded from " + fromEncoded.substring(0,9) + "...");
             }else{
-                alert(key + ": " + match + " found in " + src);
+                notify(key + ": " + match + " found in " + src);
             }
         }
     })
     updateTab();
 }
 
+// service workers have no alert(), so findings are surfaced as system notifications
+var notify = function(message){
+    chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icon128.png",
+        title: "Trufflehog",
+        message: message,
+        priority: 2
+    });
+}
+
 var updateTab = function(){
-     chrome.tabs.getSelected(null, function(tab) {
-        var tabId = tab.id;
-        var tabUrl = tab.url;
-        var origin = (new URL(tabUrl)).origin
+     chrome.tabs.query({active: true, lastFocusedWindow: true}, function(tabs) {
+        let tab = tabs[0];
+        if (!tab || !tab.url){
+            return;
+        }
+        let origin;
+        try {
+            origin = (new URL(tab.url)).origin;
+        } catch(e) {
+            return;
+        }
         chrome.storage.sync.get(["leakedKeys"], function(result) {
-            if (Array.isArray(result.leakedKeys[origin])){
-                var originKeys = result.leakedKeys[origin].length.toString();
-            }else{
-                var originKeys = "";
+            let originKeys = "";
+            if (result.leakedKeys && Array.isArray(result.leakedKeys[origin])){
+                originKeys = result.leakedKeys[origin].length.toString();
             }
-            chrome.browserAction.setBadgeText({text: originKeys});
-            chrome.browserAction.setBadgeBackgroundColor({color: '#ff0000'});
+            chrome.action.setBadgeText({text: originKeys});
+            chrome.action.setBadgeBackgroundColor({color: '#ff0000'});
         })
     });
 }
@@ -209,7 +212,7 @@ var getDecodedb64 = function(inputString){
     let b64CharSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     let encodeds = getStringsOfSet(inputString, b64CharSet);
     let decodeds = [];
-    for (encoded of encodeds){
+    for (let encoded of encodeds){
         try {
             let decoded = [encoded, atob(encoded)];
             decodeds.push(decoded);
@@ -222,9 +225,9 @@ var getDecodedb64 = function(inputString){
 var checkIfOriginDenied = function(check_url, cb){
     let skip = false;
     chrome.storage.sync.get(["originDenyList"], function(result) {
-        let originDenyList = result.originDenyList;
-        for (origin of originDenyList){
-            if(check_url.startsWith(origin)){
+        let originDenyList = result.originDenyList || [];
+        for (let origin of originDenyList){
+            if(origin && check_url.startsWith(origin)){
                 skip = true;
             }
         }
@@ -233,12 +236,12 @@ var checkIfOriginDenied = function(check_url, cb){
 }
 var checkForGitDir = function(data, url){
     if(data.startsWith("[core]")){
-        alert(".git dir found in " + url + " feature to check this for secrets not supported");
+        notify(".git dir found in " + url + " feature to check this for secrets not supported");
     }
 
 }
 var js_url;
-chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
     chrome.storage.sync.get(['generics'], function(useGenerics) {
         chrome.storage.sync.get(['specifics'], function(useSpecifics) {
@@ -290,8 +293,11 @@ chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
                                     .then(data => checkData(data, ".env file at " + request.envFile, regexes, undefined, request.parentUrl, request.parentOrigin));
                             }
                         }else if(request.openTabs){
-                            for (tab of request.openTabs){
-                                window.open(tab);
+                            for (let tab of request.openTabs){
+                                if (!tab){
+                                    continue;
+                                }
+                                chrome.tabs.create({url: tab, active: false});
                                 console.log(tab)
                             }
                         }else if(request.gitDir){
