@@ -198,7 +198,7 @@ function updateBadge() {
 }
 
 function saveLeakedKeys(msg) {
-    chrome.storage.sync.set({"leakedKeys": state.leakedKeys}, function() {
+    chrome.storage.local.set({"leakedKeys": state.leakedKeys}, function() {
         updateBadge();
         render();
         if (msg) toast(msg);
@@ -216,7 +216,7 @@ function deleteFinding(origin, finding) {
 }
 
 function loadFindings() {
-    chrome.storage.sync.get(["leakedKeys"], function(result) {
+    chrome.storage.local.get(["leakedKeys"], function(result) {
         let keys = result.leakedKeys;
         state.leakedKeys = (keys && !Array.isArray(keys)) ? keys : {};
         render();
@@ -237,7 +237,7 @@ $("search").addEventListener("input", function(e) {
 });
 
 chrome.storage.onChanged.addListener(function(changes, area) {
-    if (area === "sync" && changes.leakedKeys) {
+    if (area === "local" && changes.leakedKeys) {
         loadFindings();
     }
 });
@@ -262,7 +262,7 @@ function csvCell(value) {
 }
 
 var downloadCSV = function(){
-    chrome.storage.sync.get(["leakedKeys"], function(result) {
+    chrome.storage.local.get(["leakedKeys"], function(result) {
         let csvRows = [["origin", "src", "parentUrl", "type", "match", "encoded"]];
         for (let origin in result.leakedKeys){
             var findings = result.leakedKeys[origin];

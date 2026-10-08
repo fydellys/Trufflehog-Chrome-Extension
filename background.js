@@ -12,6 +12,25 @@ chrome.runtime.onInstalled.addListener(function() {
             chrome.storage.sync.set({"originDenyList": ["https://www.google.com"]});
         }
     })
+    // findings used to live in storage.sync (8KB per item), move them to storage.local
+    chrome.storage.sync.get(["leakedKeys"], function(oldResult) {
+        let oldKeys = oldResult.leakedKeys;
+        if (!oldKeys || Array.isArray(oldKeys)){
+            return;
+        }
+        chrome.storage.local.get(["leakedKeys"], function(result) {
+            let keys = (result.leakedKeys && !Array.isArray(result.leakedKeys)) ? result.leakedKeys : {};
+            for (let origin in oldKeys){
+                if (!Array.isArray(oldKeys[origin])){
+                    continue;
+                }
+                keys[origin] = (keys[origin] || []).concat(oldKeys[origin]);
+            }
+            chrome.storage.local.set({"leakedKeys": keys}, function(){
+                chrome.storage.sync.remove("leakedKeys");
+            });
+        })
+    })
 })
 
 
@@ -149,7 +168,7 @@ var checkData = function(data, src, regexes, fromEncoded=false, parentUrl=undefi
         }
     }
     if (findings){
-        chrome.storage.sync.get(["leakedKeys"], function(result) {
+        chrome.storage.local.get(["leakedKeys"], function(result) {
             if (Array.isArray(result.leakedKeys) || ! result.leakedKeys){
                 var keys = {};
             }else{
@@ -166,13 +185,13 @@ var checkData = function(data, src, regexes, fromEncoded=false, parentUrl=undefi
                     }
                     if(newFinding){
                         keys[parentOrigin].push(finding)
-                        chrome.storage.sync.set({"leakedKeys": keys}, function(){
+                        chrome.storage.local.set({"leakedKeys": keys}, function(){
                             updateTabAndAlert(finding);
                         });
                     }
                 }else{
                     keys[parentOrigin] = [finding];
-                    chrome.storage.sync.set({"leakedKeys": keys}, function(){
+                    chrome.storage.local.set({"leakedKeys": keys}, function(){
                         updateTabAndAlert(finding);
                     })
                 }
@@ -225,7 +244,7 @@ var updateTab = function(){
         } catch(e) {
             return;
         }
-        chrome.storage.sync.get(["leakedKeys"], function(result) {
+        chrome.storage.local.get(["leakedKeys"], function(result) {
             let originKeys = "";
             if (result.leakedKeys && Array.isArray(result.leakedKeys[origin])){
                 originKeys = result.leakedKeys[origin].length.toString();
