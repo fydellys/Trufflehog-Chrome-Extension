@@ -316,6 +316,12 @@ var checkForGitDir = function(data, url){
     }
 
 }
+// unreachable/blocked resources are expected while scanning; log quietly instead of
+// surfacing an uncaught rejection on chrome://extensions
+var logFetchError = function(url, error){
+    console.debug("Trufflehog: could not fetch " + url + ": " + error);
+}
+
 var js_url;
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
@@ -351,7 +357,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                                 if (!skip){
                                     fetch(js_url, {"credentials": 'include'})
                                         .then(response => response.text())
-                                        .then(data => checkData(data, js_url, regexes, undefined, parentUrl, parentOrigin));
+                                        .then(data => checkData(data, js_url, regexes, undefined, parentUrl, parentOrigin))
+                                        .catch(e => logFetchError(js_url, e));
                                 }
 
                             })
@@ -366,7 +373,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                             if(checkEnv['checkEnv']){
                                 fetch(request.envFile, {"credentials": 'include'})
                                     .then(response => response.text())
-                                    .then(data => checkData(data, ".env file at " + request.envFile, regexes, undefined, request.parentUrl, request.parentOrigin));
+                                    .then(data => checkData(data, ".env file at " + request.envFile, regexes, undefined, request.parentUrl, request.parentOrigin))
+                                    .catch(e => logFetchError(request.envFile, e));
                             }
                         }else if(request.openTabs){
                             for (let tab of request.openTabs){
@@ -380,7 +388,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                             if(checkGit['checkGit']){
                             fetch(request.gitDir, {"credentials": 'include'})
                                     .then(response => response.text())
-                                    .then(data => checkForGitDir(data, request.gitDir));
+                                    .then(data => checkForGitDir(data, request.gitDir))
+                                    .catch(e => logFetchError(request.gitDir, e));
                             }
 
                         }
