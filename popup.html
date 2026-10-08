@@ -1,84 +1,112 @@
-<!-- Copyright 2017 The Chromium Authors. All rights reserved.
-Use of this source code is governed by a BSD-style license that can be
-found in the LICENSE file. -->
-<html>
+<!doctype html>
+<html lang="en">
   <head>
-      <title>Trufflehog</title>
-      <link href="popup.css" rel="stylesheet" type="text/css">
+    <meta charset="utf-8">
+    <title>Trufflehog</title>
+    <link href="popup.css" rel="stylesheet" type="text/css">
   </head>
-  <body style="width: 300px;">
-      <img src='./icon.png' style="width: 128px; margin: auto; display: block;">
-      <div>
-          <h3>Generic Secrets</h3>
-          <label class="switch">
-              <input type="checkbox" id="generics">
-              <span class="slider"></span>
-          </label>
+  <body>
+    <header class="header">
+      <img src="icon48.png" class="logo" alt="">
+      <div class="header-text">
+        <div class="title">Trufflehog</div>
+        <div class="origin" id="currentOrigin" title="">—</div>
       </div>
-      <div>
-          <h3>Specific Secrets</h3>
-          <label class="switch">
-              <input type="checkbox" id="specifics">
-              <span class="slider"></span>
-          </label>
-      </div>
-      <div>
-          <h3>AWS Keys</h3>
-          <label class="switch">
-              <input type="checkbox" id="aws">
-              <span class="slider"></span>
-          </label>
-      </div>
-      <div style="margin-bottom: 10px">
-          <h3>Check for .env files</h3>
-          <h5>(can trigger WAF bans)</h5>
-          <label class="switch">
-              <input type="checkbox" id="checkEnv">
-              <span class="slider"></span>
-          </label>
-      </div>
-      <div style="margin-bottom: 10px">
-          <h3>Check for .git dirs</h3>
-          <h5>(can trigger WAF bans)</h5>
-          <label class="switch">
-              <input type="checkbox" id="checkGit">
-              <span class="slider"></span>
-          </label>
-      </div>
-      <div style="margin-bottom: 10px">
-          <h3>Alerts</h3>
-          <label class="switch">
-              <input type="checkbox" id="alerts">
-              <span class="slider"></span>
-          </label>
-      </div>
-      <div>
-          <button class="accordion"><h3>Origin Deny List</h3></button>
-          <div class="panel">
-              Comma Seperated
-              <textarea style="width:100%" id="denyList"></textarea>
-          </div>
-      </div>
-       <div>
-          <button class="accordion"><h3>Findings</h3></button>
-          <div class="panel">
-              <button style="margin-top: 10px" id="clearOriginFindings">Clear This Origin</button>
-              <button style="margin-top: 10px" id="clearAllFindings">Clear All Origins</button>
-              <button style="margin-top: 10px" id="downloadAllFindings">Download All Findings</button>
-              <h3>Findings for this origin</h3>
-              <ul id="findingList">
+      <div class="count-pill" id="countPill" title="Findings on this site">0</div>
+    </header>
 
-              </ul>
-          </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="findings" role="tab">Findings</button>
+      <button class="tab" data-tab="settings" role="tab">Settings</button>
+      <button class="tab" data-tab="tools" role="tab">Tools</button>
+    </nav>
+
+    <!-- FINDINGS -->
+    <section class="view active" id="view-findings">
+      <div class="toolbar">
+        <div class="segmented" id="scopeSwitch">
+          <button data-scope="origin" class="active">This site</button>
+          <button data-scope="all">All</button>
+        </div>
+        <input type="search" id="search" placeholder="Filter by type, value, file…">
       </div>
-      <div>
-          <button class="accordion"><h3>Open Lots Of Tabs</h3></button>
-          <div class="panel">
-              Comma Seperated
-              <button style="margin-top: 10px" id="openTabs">Open Tabs</button>
-              <textarea style="width:100%" id="tabList" placeholder="https://google.com,https://yahoo.com"></textarea>
-          </div>
+      <div id="findingList" class="finding-list"></div>
+      <div id="emptyState" class="empty hidden">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        <div class="empty-title">No secrets found</div>
+        <div class="empty-sub" id="emptySub">Browse the site — scripts and page HTML are scanned automatically.</div>
       </div>
-   <script src="popup.js"></script>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <div class="group-label">Detection</div>
+      <div class="card">
+        <label class="row">
+          <div class="row-text"><div class="row-title">Specific secrets</div><div class="row-sub">Known tokens: GitHub, Stripe, Slack, OpenAI…</div></div>
+          <input type="checkbox" class="toggle" id="specifics">
+        </label>
+        <label class="row">
+          <div class="row-text"><div class="row-title">Generic secrets</div><div class="row-sub">Patterns like api_key = "…" and secret = "…"</div></div>
+          <input type="checkbox" class="toggle" id="generics">
+        </label>
+        <label class="row">
+          <div class="row-text"><div class="row-title">AWS keys</div><div class="row-sub">AKIA, ASIA and other access key prefixes</div></div>
+          <input type="checkbox" class="toggle" id="aws">
+        </label>
+      </div>
+
+      <div class="group-label">Active probing</div>
+      <div class="card">
+        <label class="row">
+          <div class="row-text"><div class="row-title">Check for .env files</div><div class="row-sub warn">Can trigger WAF bans</div></div>
+          <input type="checkbox" class="toggle" id="checkEnv">
+        </label>
+        <label class="row">
+          <div class="row-text"><div class="row-title">Check for .git dirs</div><div class="row-sub warn">Can trigger WAF bans</div></div>
+          <input type="checkbox" class="toggle" id="checkGit">
+        </label>
+      </div>
+
+      <div class="group-label">Notifications</div>
+      <div class="card">
+        <label class="row">
+          <div class="row-text"><div class="row-title">Alerts</div><div class="row-sub">System notification for every new finding</div></div>
+          <input type="checkbox" class="toggle" id="alerts">
+        </label>
+      </div>
+
+      <div class="group-label">Origin deny list</div>
+      <div class="card pad">
+        <textarea id="denyList" rows="3" placeholder="https://www.google.com, https://example.com"></textarea>
+        <div class="hint">Comma separated. Saved automatically. <span id="denySaved" class="saved hidden">Saved ✓</span></div>
+        <button class="btn ghost small" id="denyCurrent">+ Deny this site</button>
+      </div>
+    </section>
+
+    <!-- TOOLS -->
+    <section class="view" id="view-tools">
+      <div class="group-label">Findings</div>
+      <div class="card pad stack">
+        <button class="btn" id="downloadAllFindings">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+          Export all (CSV)
+        </button>
+        <div class="btn-row">
+          <button class="btn danger-ghost" id="clearOriginFindings">Clear this site</button>
+          <button class="btn danger" id="clearAllFindings">Clear all</button>
+        </div>
+      </div>
+
+      <div class="group-label">Open lots of tabs</div>
+      <div class="card pad stack">
+        <textarea id="tabList" rows="4" placeholder="https://site1.com, https://site2.com"></textarea>
+        <div class="hint">Comma separated or one per line. They open in the background to be scanned.</div>
+        <button class="btn" id="openTabs">Open tabs</button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast"></div>
+    <script src="popup.js"></script>
   </body>
 </html>

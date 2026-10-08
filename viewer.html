@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Trufflehog — Viewer</title>
+    <link rel="icon" href="icon16.png">
+    <link href="viewer.css" rel="stylesheet" type="text/css">
+  </head>
+  <body>
+    <header class="bar">
+      <img src="icon48.png" class="logo" alt="">
+      <div class="info">
+        <div class="type" id="type">—</div>
+        <a class="url" id="url" target="_blank" rel="noreferrer"></a>
+      </div>
+      <div class="nav">
+        <span class="counter" id="counter">0 / 0</span>
+        <button class="icon-btn" id="prev" title="Previous match (Shift+Enter)">↑</button>
+        <button class="icon-btn" id="next" title="Next match (Enter)">↓</button>
+      </div>
+      <label class="wrap-toggle"><input type="checkbox" id="wrap" checked> Wrap lines</label>
+      <button class="btn ghost" id="copy">Copy value</button>
+      <button class="btn" id="openRaw">Open original</button>
+    </header>
+
+    <div class="match-strip">
+      <span class="label">Matched value</span>
+      <code id="matchValue"></code>
+      <span class="tag hidden" id="b64Tag">decoded from base64</span>
+    </div>
+
+    <div id="notice" class="notice hidden"></div>
+
+    <main id="code" class="code wrap">
+      <div class="loading">Loading file…</div>
+    </main>
+
+    <script src="viewer.js"></script>
+  </body>
+</html>
